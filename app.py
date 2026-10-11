@@ -128,7 +128,14 @@ def maybe_browse(prompt):
             return '\n[החיפוש לא החזיר תוצאות]'
         # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
         if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
-            return 'MEDIAQ:' + prompt[:200]
+            try:
+                qmsgs = [{'role': 'system', 'content': 'Extract a short web search query (2-6 words) for the requested song/podcast/lecture. Fix obvious speech-to-text errors. Reply with ONLY the query, nothing else.'},
+                         {'role': 'user', 'content': prompt}]
+                clean_q, _ = smart_chat(qmsgs)
+                clean_q = clean_q.strip().strip('"')[:120]
+            except Exception:
+                clean_q = prompt[:120]
+            return 'MEDIAQ:' + clean_q
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
     return ''
