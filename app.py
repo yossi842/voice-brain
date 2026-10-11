@@ -94,10 +94,13 @@ def maybe_browse(prompt):
         r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': target, 'text': '1'}, timeout=90)
         if r.ok:
             lines = r.json().get('lines', [])
-            heb = [l for l in lines if any('\u0590' <= c <= '\u05ea' for c in l)][:12]
-            use = heb if heb else lines[:12]
+            heb = [l for l in lines if any('\u0590' <= c <= '\u05ea' for c in l)]
+            heb = [l for l in heb if '|' not in l and 'אתר החדשות' not in l and 'כל הזכויות' not in l][:12]
+            use = heb if heb else lines[1:13]
             if use:
-                return '\n[כותרות חיות מ-' + target + ' דרך הדפדפן, ענה לפיהן]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use))
+                return ('\n[מידע חי מ-' + target + ' דרך הדפדפן. חובה לענות לפיו. '
+                        'השורה הראשונה ברשימה היא הכתבה הראשונה באתר. '
+                        'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
             return '\n[הגלישה לא החזירה כותרות]'
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
