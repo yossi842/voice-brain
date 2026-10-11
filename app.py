@@ -77,31 +77,64 @@ def extract_headlines(html):
                 return heads
     return heads
 
+def oracle_text(url):
+    r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': url, 'text': '1'}, timeout=90)
+    r.raise_for_status()
+    return r.json()
+
+def clean_lines(lines, skip_title=True):
+    heb = [l for l in lines if any('\u0590' <= c <= '\u05ea' for c in l)]
+    if skip_title:
+        heb = [l for l in heb if '|' not in l and 'אתר החדשות' not in l and 'כל הזכויות' not in l]
+    return heb[:12]
+
 def maybe_browse(prompt):
-    target = None
-    if 'http' in prompt:
-        target = 'http' + prompt.split('http', 1)[1].split()[0]
-    else:
+    try:
+        # 1. explicit URL -> fetch full text
+        if 'http' in prompt:
+            url = 'http' + prompt.split('http', 1)[1].split()[0]
+            d = oracle_text(url)
+            lines = clean_lines(d.get('lines', []), skip_title=False)[:25]
+            return ('\n[טקסט חי מ-' + url + '. סכם/ענה לפיו, אסור לומר שאין גישה]:\n'
+                    + '\n'.join(lines)[:4000])
+        # 2. summarize first article from a site
+        if any(w in prompt for w in ['סכם', 'תמצת', 'צטט', 'קרא', 'תמצית', 'סיכום']) and any(w in prompt for w in ['כתבה', 'מאמר', 'ידיעה']):
+            site = next((u for n, u in SITE_MAP.items() if n in prompt), 'https://www.ynet.co.il')
+            d = oracle_text(site)
+            art = next((l['u'] for l in d.get('links', []) if '/video' not in l['u'] and l['u'] != site and not l['u'].endswith('.ico')), None)
+            if art:
+                a = oracle_text(art)
+                lines = clean_lines(a.get('lines', []), skip_title=False)[:40]
+                return ('\n[כתבה מלאה מ-' + art + '. סכם את כולה בעברית]:\n' + '\n'.join(lines)[:5000])
+            return '\n[לא נמצאה כתבה באתר]'
+        # 3. site headlines
         for name, url in SITE_MAP.items():
             if name in prompt:
-                target = url
-                break
-        if not target and any(w in prompt for w in NEWS_WORDS):
-            target = 'https://www.ynet.co.il'
-    if not target:
-        return ''
-    try:
-        r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': target, 'text': '1'}, timeout=90)
-        if r.ok:
-            lines = r.json().get('lines', [])
-            heb = [l for l in lines if any('\u0590' <= c <= '\u05ea' for c in l)]
-            heb = [l for l in heb if '|' not in l and 'אתר החדשות' not in l and 'כל הזכויות' not in l][:12]
-            use = heb if heb else lines[1:13]
-            if use:
-                return ('\n[מידע חי מ-' + target + ' דרך הדפדפן. חובה לענות לפיו. '
-                        'השורה הראשונה ברשימה היא הכתבה הראשונה באתר. '
-                        'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
-            return '\n[הגלישה לא החזירה כותרות]'
+                d = oracle_text(url)
+                use = clean_lines(d.get('lines', []))[:12]
+                if use:
+                    return ('\n[מידע חי מ-' + url + '. חובה לענות לפיו. השורה הראשונה היא הכתבה הראשונה. '
+                            'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
+                return '\n[הגלישה לא החזירה כותרות]'
+        # 4. research via DuckDuckGo
+        if any(w in prompt for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'מה קורה', 'עדכני']):
+            q = prompt
+            for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'בבקשה', 'לי', 'את', 'על']:
+                q = q.replace(w, ' ').strip(' :')
+            from urllib.parse import quote_plus
+            d = oracle_text('https://html.duckduckgo.com/html/?q=' + quote_plus(q[:150]))
+            res = [f"{l['t']} ({l['u']})" for l in d.get('links', [])[:8]]
+            if res:
+                return '\n[תוצאות חיפוש חיות, סכם מהן תשובה]:\n' + '\n'.join(res)[:3000]
+            return '\n[החיפוש לא החזיר תוצאות]'
+        # 5. song download -> MEDIA command for bridge
+        if any(w in prompt for w in ['שיר', 'מוזיקה', 'הורד']) and any(w in prompt for w in ['הורד', 'שים', 'נגן', 'שלח', 'השמע']):
+            from urllib.parse import quote_plus
+            d = oracle_text('https://html.duckduckgo.com/html/?q=' + quote_plus(prompt[:150] + ' mp3'))
+            mp = next((l['u'] for l in d.get('links', []) if l['u'].lower().endswith('.mp3')), None)
+            if mp:
+                return 'MEDIA:' + mp
+            return '\n[לא נמצא קובץ שמע ישיר. בקש קישור ישיר לקובץ mp3.]'
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
     return ''
@@ -139,6 +172,8 @@ def voice():
     except Exception as e:
         return jsonify({'error': f'stt failed: {e}'}), 503
     extra = maybe_browse(text)
+    if extra.startswith('MEDIA:'):
+        return jsonify({'reply': extra})
     msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות.'},
             {'role': 'user', 'content': text + extra}]
     try:
