@@ -62,14 +62,19 @@ NEWS_WORDS = ['כתבה ראשונה', 'כותרת ראשית', 'מה חדש', '
 def extract_headlines(html):
     import re, html as _h
     heads = []
-    for pat in (r'<title[^>]*>(.*?)</title>', r'<h1[^>]*>(.*?)</h1>', r'<h2[^>]*>(.*?)</h2>'):
+    def clean(t):
+        t = re.sub(r'<[^>]+>', '', t)
+        return _h.unescape(t).strip()
+    for pat in (r'<title[^>]*>(.*?)</title>',
+                r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\'](.*?)["\']',
+                r'<h1[^>]*>(.*?)</h1>', r'<h2[^>]*>(.*?)</h2>',
+                r'<a[^>]*>(.*?)</a>'):
         for m in re.finditer(pat, html, re.S | re.I):
-            t = re.sub(r'<[^>]+>', '', m.group(1))
-            t = _h.unescape(t).strip()
-            if len(t) > 15 and t not in heads:
+            t = clean(m.group(1))
+            if len(t) > 20 and len(t) < 200 and t not in heads and any('\u0590' <= c <= '\u05ea' for c in t):
                 heads.append(t)
             if len(heads) >= 15:
-                break
+                return heads
     return heads
 
 def maybe_browse(prompt):
@@ -86,11 +91,13 @@ def maybe_browse(prompt):
     if not target:
         return ''
     try:
-        r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': target}, timeout=60)
+        r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': target, 'text': '1'}, timeout=90)
         if r.ok:
-            heads = extract_headlines(r.json().get('html', ''))
-            if heads:
-                return '\n[כותרות חיות מ-' + target + ' דרך הדפדפן, ענה לפיהן]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(heads))
+            lines = r.json().get('lines', [])
+            heb = [l for l in lines if any('\u0590' <= c <= '\u05ea' for c in l)][:12]
+            use = heb if heb else lines[:12]
+            if use:
+                return '\n[כותרות חיות מ-' + target + ' דרך הדפדפן, ענה לפיהן]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use))
             return '\n[הגלישה לא החזירה כותרות]'
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
