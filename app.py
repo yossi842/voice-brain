@@ -46,18 +46,54 @@ def smart_chat(messages):
             errors.append(str(e)); time.sleep(1)
     raise RuntimeError('all models failed: ' + ' | '.join(errors))
 
+SITE_MAP = {
+    'כיכר השבת': 'https://www.kikar.co.il', 'כיכר': 'https://www.kikar.co.il',
+    'ynet': 'https://www.ynet.co.il', 'וויינט': 'https://www.ynet.co.il',
+    'וואלה': 'https://www.walla.co.il', 'walla': 'https://www.walla.co.il',
+    'חדשות 12': 'https://www.mako.co.il', 'מאקו': 'https://www.mako.co.il', 'mako': 'https://www.mako.co.il',
+    'ישראל היום': 'https://www.israelhayom.co.il',
+    'הארץ': 'https://www.haaretz.co.il', 'ynet ספורט': 'https://www.ynet.co.il/sport',
+    'בחדרי חרדים': 'https://www.bhol.co.il', 'בחדרי': 'https://www.bhol.co.il',
+    'JDN': 'https://www.jdn.co.il',
+    'הידברות': 'https://www.hidabroot.org',
+}
+NEWS_WORDS = ['כתבה ראשונה', 'כותרת ראשית', 'מה חדש', 'מה קורה', 'חדשות', 'כותרות', 'הכתבה', 'הכותרת', 'עדכני', 'היום']
+
+def extract_headlines(html):
+    import re, html as _h
+    heads = []
+    for pat in (r'<title[^>]*>(.*?)</title>', r'<h1[^>]*>(.*?)</h1>', r'<h2[^>]*>(.*?)</h2>'):
+        for m in re.finditer(pat, html, re.S | re.I):
+            t = re.sub(r'<[^>]+>', '', m.group(1))
+            t = _h.unescape(t).strip()
+            if len(t) > 15 and t not in heads:
+                heads.append(t)
+            if len(heads) >= 15:
+                break
+    return heads
+
 def maybe_browse(prompt):
-    if any(k in prompt for k in ['גלוש', 'browse:', 'חפש באינטרנט', 'fetch:']):
-        url = prompt.split('http', 1)
-        if len(url) == 2:
-            full = 'http' + url[1].split()[0]
-            try:
-                r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': full}, timeout=45)
-                if r.ok:
-                    html = r.json().get('html', '')[:4000]
-                    return f'\n[תוכן מהדפדפן Oracle]:\n{html}'
-            except Exception as e:
-                return f'\n[גלישה נכשלה: {e}]'
+    target = None
+    if 'http' in prompt:
+        target = 'http' + prompt.split('http', 1)[1].split()[0]
+    else:
+        for name, url in SITE_MAP.items():
+            if name in prompt:
+                target = url
+                break
+        if not target and any(w in prompt for w in NEWS_WORDS):
+            target = 'https://www.ynet.co.il'
+    if not target:
+        return ''
+    try:
+        r = requests.get(f'{ORACLE_URL}/fetch', params={'key': BROWSE_KEY, 'url': target}, timeout=60)
+        if r.ok:
+            heads = extract_headlines(r.json().get('html', ''))
+            if heads:
+                return '\n[כותרות חיות מ-' + target + ' דרך הדפדפן, ענה לפיהן]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(heads))
+            return '\n[הגלישה לא החזירה כותרות]'
+    except Exception as e:
+        return f'\n[גלישה נכשלה: {e}]'
     return ''
 
 @app.route('/health')
@@ -69,7 +105,7 @@ def chat():
     d = request.get_json(force=True)
     prompt = d.get('text', '')
     extra = maybe_browse(prompt)
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות.'},
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון.'},
             {'role': 'user', 'content': prompt + extra}]
     try:
         ans, via = smart_chat(msgs)
