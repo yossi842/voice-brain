@@ -8,8 +8,8 @@ OR_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 ORACLE_URL = os.environ.get('ORACLE_BROWSE_URL', 'http://129.159.159.222:8080')
 BROWSE_KEY = os.environ.get('BROWSE_KEY', 'tzvi-free-1234')
 
-GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']
-OR_MODELS = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free']
+GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b']
+OR_MODELS = ['google/gemma-4-31b-it:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'google/gemma-4-26b-a4b-it:free']
 
 def groq_chat(messages, model):
     r = requests.post('https://api.groq.com/openai/v1/chat/completions',
