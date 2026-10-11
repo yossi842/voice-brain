@@ -127,7 +127,7 @@ def maybe_browse(prompt):
                 return '\n[תוצאות חיפוש חיות, סכם מהן תשובה]:\n' + '\n'.join(res)[:3000]
             return '\n[החיפוש לא החזיר תוצאות]'
         # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
-        if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
+        if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'תורי', 'יוריד', 'מוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
             try:
                 qmsgs = [{'role': 'system', 'content': 'Extract a short web search query (2-6 words) for the requested song/podcast/lecture. Fix obvious speech-to-text errors. Reply with ONLY the query, nothing else.'},
                          {'role': 'user', 'content': prompt}]
@@ -149,7 +149,7 @@ def chat():
     d = request.get_json(force=True)
     prompt = d.get('text', '')
     extra = maybe_browse(prompt)
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון.'},
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
             {'role': 'user', 'content': prompt + extra}]
     try:
         ans, via = smart_chat(msgs)
@@ -175,7 +175,7 @@ def voice():
     extra = maybe_browse(text)
     if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:'):
         return jsonify({'reply': extra})
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות.'},
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
             {'role': 'user', 'content': text + extra}]
     try:
         ans, via = smart_chat(msgs)
