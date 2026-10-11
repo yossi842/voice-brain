@@ -127,14 +127,9 @@ def maybe_browse(prompt):
             if res:
                 return '\n[תוצאות חיפוש חיות, סכם מהן תשובה]:\n' + '\n'.join(res)[:3000]
             return '\n[החיפוש לא החזיר תוצאות]'
-        # 5. song download -> MEDIA command for bridge
-        if any(w in prompt for w in ['שיר', 'מוזיקה', 'הורד']) and any(w in prompt for w in ['הורד', 'שים', 'נגן', 'שלח', 'השמע']):
-            from urllib.parse import quote_plus
-            d = oracle_text('https://html.duckduckgo.com/html/?q=' + quote_plus(prompt[:150] + ' mp3'))
-            mp = next((l['u'] for l in d.get('links', []) if l['u'].lower().endswith('.mp3')), None)
-            if mp:
-                return 'MEDIA:' + mp
-            return '\n[לא נמצא קובץ שמע ישיר. בקש קישור ישיר לקובץ mp3.]'
+        # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
+        if any(w in prompt for w in ['שיר', 'מוזיקה', 'הורד', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה']) and any(w in prompt for w in ['הורד', 'שים', 'נגן', 'שלח', 'השמע', 'העלה', 'תוריד']):
+            return 'MEDIAQ:' + prompt[:200]
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
     return ''
@@ -172,7 +167,7 @@ def voice():
     except Exception as e:
         return jsonify({'error': f'stt failed: {e}'}), 503
     extra = maybe_browse(text)
-    if extra.startswith('MEDIA:'):
+    if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:'):
         return jsonify({'reply': extra})
     msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות.'},
             {'role': 'user', 'content': text + extra}]
