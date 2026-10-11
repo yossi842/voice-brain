@@ -116,17 +116,29 @@ def maybe_browse(prompt):
                     return ('\n[מידע חי מ-' + url + '. חובה לענות לפיו. השורה הראשונה היא הכתבה הראשונה. '
                             'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
                 return '\n[הגלישה לא החזירה כותרות]'
-        # 4. deep research via Oracle (Wikipedia + video angles)
+        # 4. deep research: cloud search (residential IP) + Wikipedia
         if any(w in prompt for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'מה קורה', 'עדכני', 'מעמיק', 'תחקיר']):
             q = prompt
             for w in ['חפש', 'מחקר', 'מעמיק', 'תחקור', 'תחקיר', 'בדוק באינטרנט', 'בבקשה', 'לי', 'את', 'על', 'תעשה']:
                 q = q.replace(w, ' ').strip(' :')
-            r = requests.get(f'{ORACLE_URL}/research', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=90)
-            j = r.json()
-            if j.get('sources', 0) > 0:
-                return ('\n[מחקר מעמיק מ-' + str(j['sources']) + ' מקורות חיים. '
-                        'תן תשובה מסודרת ומפורטת בעברית: רקע, נקודות עיקריות, וסיכום. '
-                        'אסור לומר שאין מידע]:\n' + j['text'][:6000])
+            txt = ''
+            try:
+                r = requests.get(f'{ORACLE_URL}/cloudsearch', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=120)
+                res = [f"{x['t']} ({x['u']})" for x in r.json().get('results', [])[:8]]
+                if res:
+                    txt += 'תוצאות חיפוש חיות:\n' + '\n'.join(res) + '\n\n'
+            except Exception:
+                pass
+            try:
+                r = requests.get(f'{ORACLE_URL}/research', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=90)
+                j = r.json()
+                if j.get('sources', 0) > 0:
+                    txt += 'מקורות רקע:\n' + j['text'][:4000]
+            except Exception:
+                pass
+            if txt:
+                return ('\n[מחקר מעמיק ממקורות חיים. תן תשובה מסודרת ומפורטת בעברית: רקע, נקודות עיקריות, וסיכום. '
+                        'אסור לומר שאין מידע]:\n' + txt[:6000])
             return '\n[המחקר לא החזיר מקורות]'
         # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
         if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'תורי', 'יוריד', 'מוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
