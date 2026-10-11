@@ -116,16 +116,18 @@ def maybe_browse(prompt):
                     return ('\n[מידע חי מ-' + url + '. חובה לענות לפיו. השורה הראשונה היא הכתבה הראשונה. '
                             'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
                 return '\n[הגלישה לא החזירה כותרות]'
-        # 4. research via Oracle search (Mojeek)
-        if any(w in prompt for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'מה קורה', 'עדכני']):
+        # 4. deep research via Oracle (Wikipedia + video angles)
+        if any(w in prompt for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'מה קורה', 'עדכני', 'מעמיק', 'תחקיר']):
             q = prompt
-            for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'בבקשה', 'לי', 'את', 'על']:
+            for w in ['חפש', 'מחקר', 'מעמיק', 'תחקור', 'תחקיר', 'בדוק באינטרנט', 'בבקשה', 'לי', 'את', 'על', 'תעשה']:
                 q = q.replace(w, ' ').strip(' :')
-            r = requests.get(f'{ORACLE_URL}/search', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=60)
-            res = [f"{x['t']} ({x['u']})" for x in r.json().get('results', [])[:8]]
-            if res:
-                return '\n[תוצאות חיפוש חיות, סכם מהן תשובה]:\n' + '\n'.join(res)[:3000]
-            return '\n[החיפוש לא החזיר תוצאות]'
+            r = requests.get(f'{ORACLE_URL}/research', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=90)
+            j = r.json()
+            if j.get('sources', 0) > 0:
+                return ('\n[מחקר מעמיק מ-' + str(j['sources']) + ' מקורות חיים. '
+                        'תן תשובה מסודרת ומפורטת בעברית: רקע, נקודות עיקריות, וסיכום. '
+                        'אסור לומר שאין מידע]:\n' + j['text'][:6000])
+            return '\n[המחקר לא החזיר מקורות]'
         # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
         if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'תורי', 'יוריד', 'מוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
             try:
