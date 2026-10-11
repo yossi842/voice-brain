@@ -116,14 +116,13 @@ def maybe_browse(prompt):
                     return ('\n[מידע חי מ-' + url + '. חובה לענות לפיו. השורה הראשונה היא הכתבה הראשונה. '
                             'אסור לומר שאין גישה עדכנית]:\n' + '\n'.join(f'{i+1}. {h}' for i, h in enumerate(use)))
                 return '\n[הגלישה לא החזירה כותרות]'
-        # 4. research via DuckDuckGo
+        # 4. research via Oracle search (Mojeek)
         if any(w in prompt for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'מה קורה', 'עדכני']):
             q = prompt
             for w in ['חפש', 'מחקר', 'תחקור', 'בדוק באינטרנט', 'בבקשה', 'לי', 'את', 'על']:
                 q = q.replace(w, ' ').strip(' :')
-            from urllib.parse import quote_plus
-            d = oracle_text('https://html.duckduckgo.com/html/?q=' + quote_plus(q[:150]))
-            res = [f"{l['t']} ({l['u']})" for l in d.get('links', [])[:8]]
+            r = requests.get(f'{ORACLE_URL}/search', params={'key': BROWSE_KEY, 'q': q[:150]}, timeout=60)
+            res = [f"{x['t']} ({x['u']})" for x in r.json().get('results', [])[:8]]
             if res:
                 return '\n[תוצאות חיפוש חיות, סכם מהן תשובה]:\n' + '\n'.join(res)[:3000]
             return '\n[החיפוש לא החזיר תוצאות]'
