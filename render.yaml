@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: voice-brain
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 120
+    plan: free
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: ORACLE_BROWSE_URL
+        value: http://129.159.159.222:8080
+      - key: BROWSE_KEY
+        sync: false
