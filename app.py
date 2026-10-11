@@ -135,7 +135,7 @@ def maybe_browse(prompt):
                 clean_q = clean_q.strip().strip('"')[:120]
             except Exception:
                 clean_q = prompt[:120]
-            return 'AGENT:Find the audio (' + clean_q + ') on the web and download it as an audio file.'
+            return 'AGENT:Find a direct MP3 or RSS audio file URL for (' + clean_q + '). Reply with ONLY the URL, nothing else.'
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
     return ''
