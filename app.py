@@ -135,7 +135,7 @@ def maybe_browse(prompt):
                 clean_q = clean_q.strip().strip('"')[:120]
             except Exception:
                 clean_q = prompt[:120]
-            return 'MEDIAQ:' + clean_q
+            return 'AGENT:Find the audio (' + clean_q + ') on the web and download it as an audio file.'
     except Exception as e:
         return f'\n[גלישה נכשלה: {e}]'
     return ''
@@ -173,7 +173,7 @@ def voice():
     except Exception as e:
         return jsonify({'error': f'stt failed: {e}'}), 503
     extra = maybe_browse(text)
-    if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:'):
+    if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:') or extra.startswith('AGENT:'):
         return jsonify({'reply': extra})
     msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
             {'role': 'user', 'content': text + extra}]
