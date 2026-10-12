@@ -3,22 +3,50 @@ import os, requests, io, time
 
 app = Flask(__name__)
 
-# conversation memory: last 20 messages (10 turns)
-HISTORY = []
+# conversation memory: last 20 messages (10 turns), persisted to disk so it
+# survives Render restarts and only the recent exchange is ever considered.
+import json as _json, threading as _thread
+import time as _time
+
 HISTORY_MAX = 20
 HISTORY_TTL = 1800  # drop context after 30 min of silence
+HISTORY_FILE = os.environ.get('HISTORY_FILE', '/tmp/voice_history.json')
+_hlock = _thread.Lock()
+
+def _load_history():
+    try:
+        with open(HISTORY_FILE, 'r', encoding='utf-8') as fh:
+            data = _json.load(fh)
+        return [(d['r'], d['c'], d['t']) for d in data][-HISTORY_MAX:]
+    except Exception:
+        return []
+
+def _save_history(hist):
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as fh:
+            _json.dump([{'r': r, 'c': c, 't': t} for r, c, t in hist], fh, ensure_ascii=False)
+    except Exception:
+        pass
 
 def history_messages():
-    import time as _t
-    now = _t.time()
-    while HISTORY and (now - HISTORY[0][2]) > HISTORY_TTL:
-        HISTORY.pop(0)
-    return [{'role': r, 'content': c} for r, c, _ in HISTORY]
+    now = _time.time()
+    with _hlock:
+        hist = _load_history()
+        while hist and (now - hist[0][2]) > HISTORY_TTL:
+            hist.pop(0)
+        _save_history(hist)
+    return [{'role': r, 'content': c} for r, c, _ in hist]
 
 def history_add(role, content):
-    HISTORY.append((role, str(content)[:1200], __import__('time').time()))
-    while len(HISTORY) > HISTORY_MAX:
-        HISTORY.pop(0)
+    with _hlock:
+        hist = _load_history()
+        hist.append((role, str(content)[:1200], _time.time()))
+        hist = hist[-HISTORY_MAX:]
+        _save_history(hist)
+
+def history_clear():
+    with _hlock:
+        _save_history([])
 
 GROQ_KEY = os.environ.get('GROQ_API_KEY', '')
 OR_KEY = os.environ.get('OPENROUTER_API_KEY', '')
@@ -243,8 +271,12 @@ def voice():
 
 @app.route('/reset', methods=['POST'])
 def reset():
-    HISTORY.clear()
-    return jsonify({'ok': True, 'size': len(HISTORY)})
+    history_clear()
+    return jsonify({'ok': True})
+
+@app.route('/history-size')
+def history_size():
+    return jsonify({'messages': len(history_messages())})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
