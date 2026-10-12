@@ -3,6 +3,23 @@ import os, requests, io, time
 
 app = Flask(__name__)
 
+# conversation memory: last 20 messages (10 turns)
+HISTORY = []
+HISTORY_MAX = 20
+HISTORY_TTL = 1800  # drop context after 30 min of silence
+
+def history_messages():
+    import time as _t
+    now = _t.time()
+    while HISTORY and (now - HISTORY[0][2]) > HISTORY_TTL:
+        HISTORY.pop(0)
+    return [{'role': r, 'content': c} for r, c, _ in HISTORY]
+
+def history_add(role, content):
+    HISTORY.append((role, str(content)[:1200], __import__('time').time()))
+    while len(HISTORY) > HISTORY_MAX:
+        HISTORY.pop(0)
+
 GROQ_KEY = os.environ.get('GROQ_API_KEY', '')
 OR_KEY = os.environ.get('OPENROUTER_API_KEY', '')
 ORACLE_URL = os.environ.get('ORACLE_BROWSE_URL', 'http://129.159.159.222:8080')
@@ -176,10 +193,13 @@ def chat():
     d = request.get_json(force=True)
     prompt = d.get('text', '')
     extra = maybe_browse(prompt)
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות בטקסט פשוט בלבד. אין לכתוב JSON, אין קריאות כלים, אין תגיות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
-            {'role': 'user', 'content': prompt + extra}]
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות בטקסט פשוט בלבד. אין לכתוב JSON, אין קריאות כלים, אין תגיות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'}]
+    msgs += history_messages()
+    msgs.append({'role': 'user', 'content': prompt + extra})
     try:
         ans, via = smart_chat(msgs)
+        history_add('user', prompt)
+        history_add('assistant', ans)
         return jsonify({'reply': ans, 'via': via})
     except Exception as e:
         return jsonify({'error': str(e)}), 503
@@ -202,12 +222,15 @@ def voice():
     extra = maybe_browse(text)
     if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:') or extra.startswith('AGENT:'):
         return jsonify({'reply': extra})
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות בטקסט פשוט בלבד, בלי JSON. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
-            {'role': 'user', 'content': text + extra}]
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות בטקסט פשוט בלבד, בלי JSON. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'}]
+    msgs += history_messages()
+    msgs.append({'role': 'user', 'content': text + extra})
     try:
         ans, via = smart_chat(msgs)
     except Exception as e:
         return jsonify({'error': str(e), 'transcript': text}), 503
+    history_add('user', text)
+    history_add('assistant', ans)
     # TTS via gTTS (free, no key)
     try:
         from gtts import gTTS
@@ -217,6 +240,11 @@ def voice():
         return send_file(buf, mimetype='audio/mpeg', download_name='reply.mp3')
     except Exception as e:
         return jsonify({'reply': ans, 'via': via, 'tts_error': str(e)})
+
+@app.route('/reset', methods=['POST'])
+def reset():
+    HISTORY.clear()
+    return jsonify({'ok': True, 'size': len(HISTORY)})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 10000)))
