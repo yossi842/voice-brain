@@ -146,6 +146,16 @@ def clean_lines(lines, skip_title=True):
         heb = [l for l in heb if '|' not in l and 'אתר החדשות' not in l and 'כל הזכויות' not in l]
     return heb[:12]
 
+def agent_task_for(prompt):
+    """Turn a voice request into a browser-agent task (Hebrew)."""
+    try:
+        m = [{'role': 'system', 'content': 'Convert the user request into ONE clear English instruction for a web browsing AI agent that controls a real browser. Include: the goal, the site to use if named, and that it must download the file if asked. Reply with ONLY the instruction.'},
+             {'role': 'user', 'content': prompt}]
+        t, _ = smart_chat(m)
+        return t.strip()[:500]
+    except Exception:
+        return prompt[:500]
+
 def maybe_browse(prompt):
     try:
         # 1. explicit URL -> fetch full text
@@ -273,6 +283,21 @@ def voice():
 def reset():
     history_clear()
     return jsonify({'ok': True})
+
+@app.route('/voice-agent', methods=['POST'])
+def voice_agent():
+    """Ext 5: transcribe then hand the whole request to the browser agent."""
+    if 'audio' not in request.files:
+        return jsonify({'error': 'no audio'}), 400
+    try:
+        r = requests.post('https://api.groq.com/openai/v1/audio/transcriptions',
+            headers={'Authorization': f'Bearer {GROQ_KEY}'},
+            files={'audio': (request.files['audio'].filename or 'a.wav', request.files['audio'].read(), 'audio/wav')},
+            data={'model': 'whisper-large-v3-turbo', 'language': 'he'}, timeout=90)
+        text = r.json().get('text', '')
+    except Exception as e:
+        return jsonify({'error': f'stt failed: {e}'}), 503
+    return jsonify({'reply': 'AGENT:' + agent_task_for(text), 'transcript': text})
 
 @app.route('/history-size')
 def history_size():
