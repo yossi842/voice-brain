@@ -35,16 +35,22 @@ def smart_chat(messages):
     for m in GROQ_MODELS:
         if not GROQ_KEY: break
         try:
-            return groq_chat(messages, m), f'groq/{m}'
+            return _clean(groq_chat(messages, m)), f'groq/{m}'
         except Exception as e:
             errors.append(str(e)); time.sleep(1)
     for m in OR_MODELS:
         if not OR_KEY: break
         try:
-            return or_chat(messages, m), f'openrouter/{m}'
+            return _clean(or_chat(messages, m)), f'openrouter/{m}'
         except Exception as e:
             errors.append(str(e)); time.sleep(1)
     raise RuntimeError('all models failed: ' + ' | '.join(errors))
+
+def _clean(ans):
+    t = (ans or '').strip()
+    if t.startswith('[{') or t.startswith('{"tool') or t.startswith('{"function'):
+        raise RuntimeError('model emitted tool-call, retrying with another model')
+    return ans
 
 SITE_MAP = {
     'כיכר השבת': 'https://www.kikar.co.il', 'כיכר': 'https://www.kikar.co.il',
@@ -163,7 +169,7 @@ def chat():
     d = request.get_json(force=True)
     prompt = d.get('text', '')
     extra = maybe_browse(prompt)
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות וברורות בטקסט פשוט בלבד. אין לכתוב JSON, אין קריאות כלים, אין תגיות. אם מצורפות כותרות חיות מהדפדפן, ענה תמיד לפיהן ולא מהזיכרון. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
             {'role': 'user', 'content': prompt + extra}]
     try:
         ans, via = smart_chat(msgs)
@@ -189,7 +195,7 @@ def voice():
     extra = maybe_browse(text)
     if extra.startswith('MEDIA:') or extra.startswith('MEDIAQ:') or extra.startswith('AGENT:'):
         return jsonify({'reply': extra})
-    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
+    msgs = [{'role': 'system', 'content': 'אתה עוזר קולי בעברית. תשובות קצרות בטקסט פשוט בלבד, בלי JSON. יש לך גישה לאינטרנט דרך המערכת - לעולם אל תאמר שאין לך גישה לאינטרנט.'},
             {'role': 'user', 'content': text + extra}]
     try:
         ans, via = smart_chat(msgs)
