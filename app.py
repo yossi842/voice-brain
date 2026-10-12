@@ -140,8 +140,8 @@ def maybe_browse(prompt):
                 return ('\n[מחקר מעמיק ממקורות חיים. תן תשובה מסודרת ומפורטת בעברית: רקע, נקודות עיקריות, וסיכום. '
                         'אסור לומר שאין מידע]:\n' + txt[:6000])
             return '\n[המחקר לא החזיר מקורות]'
-        # 5. song/podcast download -> MEDIAQ command for bridge (Oracle resolves: rss/mp3/youtube)
-        if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודקאס', 'פודקסט', 'שיעור', 'הרצאה', 'סרטון', 'mp3']) and any(w in prompt for w in ['הורד', 'תוריד', 'תורי', 'יוריד', 'מוריד', 'להוריד', 'להשמיע', 'תשמיע', 'שים', 'תשים', 'נגן', 'תנגן', 'שלח', 'תשלח', 'השמע', 'העלה', 'תעלה']):
+        # 5. song/podcast download -> MEDIAQ command for bridge (fuzzy roots: STT varies)
+        if any(w in prompt for w in ['שיר', 'מוזיקה', 'פודק', 'שיעור', 'הרצאה', 'סרטון', 'mp3', 'הסכת', 'פוד']) and any(w in prompt for w in ['וריד', 'הורד', 'ורי', 'שים', 'נגן', 'שלח', 'עלה', 'שמע', 'נגן', 'ביא']):
             try:
                 qmsgs = [{'role': 'system', 'content': 'Extract a short web search query (2-6 words) for the requested song/podcast/lecture. Fix obvious speech-to-text errors. Reply with ONLY the query, nothing else.'},
                          {'role': 'user', 'content': prompt}]
