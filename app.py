@@ -50,7 +50,14 @@ def _clean(ans):
     t = (ans or '').strip()
     if t.startswith('[{') or t.startswith('{"tool') or t.startswith('{"function'):
         raise RuntimeError('model emitted tool-call, retrying with another model')
-    return ans
+    # strip markdown noise that TTS reads aloud as gibberish
+    import re
+    t = re.sub(r'[*_`#>]+', '', t)
+    t = re.sub(r'\[(.*?)\]\((.*?)\)', r'\1', t)
+    t = re.sub(r'\s{2,}', ' ', t).strip()
+    if not t:
+        raise RuntimeError('empty answer')
+    return t
 
 SITE_MAP = {
     'כיכר השבת': 'https://www.kikar.co.il', 'כיכר': 'https://www.kikar.co.il',
